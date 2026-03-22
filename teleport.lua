@@ -38,20 +38,24 @@ function module.teleportBack()
     end
 end
 
--- Update the UI for a single spawn
+-- Update the UI for a single spawn safely
 function module:updateSpawnUI(data)
+    if not self.spawnBox then return end
     self.uiElements[data.name] = self.uiElements[data.name] or {}
 
+    -- Teleport button
     local btn = self.spawnBox:AddButton(data.name, function()
         module.teleport(data.cf)
     end)
     self.uiElements[data.name].btn = btn
 
+    -- Remove button
     local removeBtn = self.spawnBox:AddButton("Remove "..data.name, function()
         module.removeSpawn(data)
     end)
     self.uiElements[data.name].removeBtn = removeBtn
 
+    -- Rename input
     local renameInput = self.spawnBox:AddInput("Rename_"..data.name,{
         Text="Rename "..data.name,
         Default=data.name
@@ -63,7 +67,8 @@ function module:updateSpawnUI(data)
     end)
     self.uiElements[data.name].renameInput = renameInput
 
-    if data.key and data.key~="" then
+    -- Optional keybind
+    if data.key and data.key ~= "" then
         local label = self.spawnBox:AddLabel(data.name.." Key")
         local keypicker = label:AddKeyPicker("TPKEY_"..data.name,{
             Default = data.key,
@@ -81,16 +86,19 @@ function module:rebuildSpawnUI()
     self.uiElements = {}
     if not self.spawnBox then return end
 
+    -- Clear previous buttons
     for _,child in ipairs(self.spawnBox:GetChildren()) do
         if child:IsA("TextButton") or child:IsA("TextBox") or child:IsA("TextLabel") then
             child:Destroy()
         end
     end
 
+    -- Teleport back button
     self.spawnBox:AddButton("Teleport Back", function()
         self.teleportBack()
     end)
 
+    -- Add all saved spawns
     for _,v in ipairs(self.spawns) do
         self:updateSpawnUI(v)
     end
@@ -108,7 +116,7 @@ end
 -- Remove a spawn
 function module.removeSpawn(data)
     for i,v in ipairs(module.spawns) do
-        if v==data then
+        if v == data then
             table.remove(module.spawns,i)
             break
         end
@@ -126,10 +134,10 @@ end
 
 -- Save all spawns using Config module
 function module:saveSpawns()
-    if self.Config and self.Config.save then
+    if self.Config and type(self.Config.save) == "function" then
         local saveTable = {}
         for _,v in ipairs(self.spawns) do
-            table.insert(saveTable,{name=v.name,cf=v.cf, key=v.key})
+            table.insert(saveTable,{name=v.name,cf=v.cf,key=v.key})
         end
         pcall(function() self.Config.save("Teleports",saveTable) end)
     end
@@ -137,7 +145,7 @@ end
 
 -- Load saved spawns from Config
 function module:loadSpawns()
-    if self.Config and self.Config.load then
+    if self.Config and type(self.Config.load) == "function" then
         local loaded = self.Config.load("Teleports") or {}
         self.spawns = {}
         for _,v in ipairs(loaded) do
@@ -152,10 +160,11 @@ end
 -- INIT MODULE
 function module.init(ctx)
     local tab = ctx.tab
-    self.Config = ctx.Config
+    self.Config = ctx.Config or {} -- fallback if Config missing
 
     local box = ctx.box
 
+    -- Input for new spawn
     box:AddInput("TPName",{
         Text="Spawn Name",
         Default="MySpawn"
@@ -167,8 +176,8 @@ function module.init(ctx)
     })
 
     box:AddButton("Set Spawn",function()
-        local name = Options.TPName.Value
-        local key = Options.TPKey.Value
+        local name = Options.TPName and Options.TPName.Value or "MySpawn"
+        local key = Options.TPKey and Options.TPKey.Value or ""
         if name ~= "" then
             module.addSpawn(name,key)
         end

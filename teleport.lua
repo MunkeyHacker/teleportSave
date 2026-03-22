@@ -1,6 +1,8 @@
 local module = {}
 
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+
 local player = Players.LocalPlayer
 
 module.meta = {
@@ -15,6 +17,9 @@ module.lastPosition = nil
 
 local spawnBox
 local managerBox
+
+local folder = "MunkeyHub/Teleports/"
+local file = folder .. game.PlaceId .. ".json"
 
 local function getRoot()
     local char = player.Character
@@ -55,7 +60,7 @@ local function rebuildUI()
     for i,data in ipairs(module.spawns) do
 
         spawnBox:AddButton(data.name,function()
-            module.teleport(data.cf)
+            module.teleport(CFrame.new(unpack(data.cf)))
         end)
 
         managerBox:AddLabel(data.name)
@@ -79,15 +84,43 @@ local function rebuildUI()
 
 end
 
+function module.save()
+
+    if not isfolder("MunkeyHub") then
+        makefolder("MunkeyHub")
+    end
+
+    if not isfolder(folder) then
+        makefolder(folder)
+    end
+
+    writefile(file,HttpService:JSONEncode(module.spawns))
+
+end
+
+function module.load()
+
+    if not isfile(file) then return end
+
+    local data = HttpService:JSONDecode(readfile(file))
+
+    module.spawns = data or {}
+
+    rebuildUI()
+
+end
+
 function module.addSpawn(name)
 
     local root = getRoot()
     if not root then return end
     if name == "" then return end
 
+    local cf = {root.CFrame:GetComponents()}
+
     table.insert(module.spawns,{
         name = name,
-        cf = root.CFrame
+        cf = cf
     })
 
     rebuildUI()
@@ -113,10 +146,18 @@ function module.init(ctx)
         Default=""
     })
 
+    box:AddButton("Save Teleports",function()
+        module.save()
+    end)
+
+    box:AddButton("Load Teleports",function()
+        module.load()
+    end)
+
     spawnBox = tab:AddRightGroupbox("Saved Teleports")
     managerBox = tab:AddLeftGroupbox("Teleport Manager")
 
-    rebuildUI()
+    module.load()
 
 end
 

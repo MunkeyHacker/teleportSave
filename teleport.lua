@@ -1,164 +1,135 @@
 local module = {}
 
 local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
-
 local player = Players.LocalPlayer
 
 module.meta = {
     name = "Teleport",
     tab = "Misc",
     side = "Left",
-    priority = 5
+    priority = 1
 }
 
 module.spawns = {}
 module.lastPosition = nil
-
-local spawnBox
-local managerBox
-
-local folder = "MunkeyHub/Teleports/"
-local file = folder .. game.PlaceId .. ".json"
+module.spawnBox = nil
+module.Config = nil
 
 local function getRoot()
-    local char = player.Character
-    if not char then return end
-    return char:FindFirstChild("HumanoidRootPart")
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart")
 end
 
+-- teleport functions
 function module.teleport(cf)
-
     local root = getRoot()
-    if not root then return end
-
     module.lastPosition = root.CFrame
     root.CFrame = cf
-
 end
 
 function module.teleportBack()
-
-    if not module.lastPosition then return end
-
-    local root = getRoot()
-    if not root then return end
-
-    root.CFrame = module.lastPosition
-
+    if module.lastPosition then
+        local root = getRoot()
+        root.CFrame = module.lastPosition
+    end
 end
 
-local function rebuildUI()
-
-    spawnBox:ClearChildren()
-    managerBox:ClearChildren()
-
-    spawnBox:AddButton("Teleport Back",function()
-        module.teleportBack()
+-- add spawn
+function module.addSpawn(ctx,name,key)
+    local root = getRoot()
+    local data = {name = name, cf = root.CFrame, key = key}
+    table.insert(module.spawns,data)
+    
+    -- add button
+    module.spawnBox:AddButton(name,function()
+        module.teleport(data.cf)
     end)
 
-    for i,data in ipairs(module.spawns) do
-
-        spawnBox:AddButton(data.name,function()
-            module.teleport(CFrame.new(unpack(data.cf)))
+    -- keybind
+    if key and key ~= "" then
+        module.spawnBox:AddLabel(name.." Key")
+        :AddKeyPicker("TPKEY_"..name,{
+            Default = key,
+            Mode = "Toggle",
+            Text = "Teleport "..name
+        })
+        Options["TPKEY_"..name]:OnClick(function()
+            module.teleport(data.cf)
         end)
+    end
 
-        managerBox:AddLabel(data.name)
+    -- save to config
+    if module.Config then
+        module.Config.Custom.Teleports = module.spawns
+        module.Config.save()
+    end
+end
 
-        managerBox:AddButton("Remove "..data.name,function()
-            table.remove(module.spawns,i)
-            rebuildUI()
-        end)
-
-        managerBox:AddButton("Rename "..data.name,function()
-
-            local new = Options.TPRename.Value
-            if new ~= "" then
-                data.name = new
-                rebuildUI()
+-- remove spawn
+function module.removeSpawn(index)
+    if module.spawns[index] then
+        table.remove(module.spawns,index)
+        -- rebuild spawnBox UI
+        if module.spawnBox then
+            module.spawnBox:ClearAllChildren()
+            for _,v in pairs(module.spawns) do
+                module.addSpawn({tab=nil},v.name,v.key)
             end
-
-        end)
-
+            module.spawnBox:AddButton("Teleport Back",module.teleportBack)
+        end
+        if module.Config then
+            module.Config.Custom.Teleports = module.spawns
+            module.Config.save()
+        end
     end
-
 end
 
-function module.save()
-
-    if not isfolder("MunkeyHub") then
-        makefolder("MunkeyHub")
+-- rename spawn
+function module.renameSpawn(index,newName)
+    if module.spawns[index] then
+        module.spawns[index].name = newName
+        -- rebuild spawnBox UI
+        if module.spawnBox then
+            module.spawnBox:ClearAllChildren()
+            for _,v in pairs(module.spawns) do
+                module.addSpawn({tab=nil},v.name,v.key)
+            end
+            module.spawnBox:AddButton("Teleport Back",module.teleportBack)
+        end
+        if module.Config then
+            module.Config.Custom.Teleports = module.spawns
+            module.Config.save()
+        end
     end
-
-    if not isfolder(folder) then
-        makefolder(folder)
-    end
-
-    writefile(file,HttpService:JSONEncode(module.spawns))
-
 end
 
-function module.load()
-
-    if not isfile(file) then return end
-
-    local data = HttpService:JSONDecode(readfile(file))
-
-    module.spawns = data or {}
-
-    rebuildUI()
-
-end
-
-function module.addSpawn(name)
-
-    local root = getRoot()
-    if not root then return end
-    if name == "" then return end
-
-    local cf = {root.CFrame:GetComponents()}
-
-    table.insert(module.spawns,{
-        name = name,
-        cf = cf
-    })
-
-    rebuildUI()
-
-end
-
+-- init UI
 function module.init(ctx)
-
-    local box = ctx.box
     local tab = ctx.tab
+    local box = ctx.box
 
-    box:AddInput("TPName",{
-        Text="Teleport Name",
-        Default="MyTeleport"
-    })
+    module.Config = ctx.Config -- link config module
 
-    box:AddButton("Save Position",function()
-        module.addSpawn(Options.TPName.Value)
+    -- load saved spawns
+    module.spawns = module.Config and module.Config.Custom.Teleports or {}
+
+    module.spawnBox = tab:AddRightGroupbox("Saved Spawns")
+    module.spawnBox:AddButton("Teleport Back",module.teleportBack)
+
+    for _,v in pairs(module.spawns) do
+        module.addSpawn(ctx,v.name,v.key)
+    end
+
+    -- input to create new spawn
+    box:AddInput("TPName",{Text="Spawn Name",Default="MySpawn"})
+    box:AddInput("TPKey",{Text="Keybind (optional)",Default=""})
+    box:AddButton("Set Spawn",function()
+        local name = Options.TPName.Value
+        local key = Options.TPKey.Value
+        if name ~= "" then
+            module.addSpawn(ctx,name,key)
+        end
     end)
-
-    box:AddInput("TPRename",{
-        Text="Rename To",
-        Default=""
-    })
-
-    box:AddButton("Save Teleports",function()
-        module.save()
-    end)
-
-    box:AddButton("Load Teleports",function()
-        module.load()
-    end)
-
-    spawnBox = tab:AddRightGroupbox("Saved Teleports")
-    managerBox = tab:AddLeftGroupbox("Teleport Manager")
-
-    module.load()
-
 end
 
 return module

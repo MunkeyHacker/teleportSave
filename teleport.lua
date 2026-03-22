@@ -5,37 +5,77 @@ local player = Players.LocalPlayer
 
 module.meta = {
     name = "Teleport",
-    tab = "Teleport",
-    side = "Left",
-    priority = 1
+    tab = "Movement",
+    side = "Right",
+    priority = 5
 }
 
 module.spawns = {}
 module.lastPosition = nil
-module.spawnBox = nil
+
+local spawnBox
 
 local function getRoot()
-    local char = player.Character or player.CharacterAdded:Wait()
-    return char:WaitForChild("HumanoidRootPart")
+
+    local char = player.Character
+    if not char then return end
+
+    return char:FindFirstChild("HumanoidRootPart")
+
 end
 
 function module.teleport(cf)
+
     local root = getRoot()
+    if not root then return end
 
     module.lastPosition = root.CFrame
     root.CFrame = cf
+
 end
 
 function module.teleportBack()
-    if module.lastPosition then
-        local root = getRoot()
-        root.CFrame = module.lastPosition
-    end
-end
 
-function module.addSpawn(ctx,name,key)
+    if not module.lastPosition then return end
 
     local root = getRoot()
+    if not root then return end
+
+    root.CFrame = module.lastPosition
+
+end
+
+local function createSpawnButton(data)
+
+    spawnBox:AddButton(data.name,function()
+        module.teleport(data.cf)
+    end)
+
+    if data.key and data.key ~= "" then
+
+        local id = "TPKEY_"..data.name..tostring(#module.spawns)
+
+        spawnBox:AddLabel(data.name.." Key")
+        :AddKeyPicker(id,{
+            Default = data.key,
+            Mode = "Toggle",
+            Text = "Teleport "..data.name
+        })
+
+        Options[id]:OnClick(function()
+            module.teleport(data.cf)
+        end)
+
+    end
+
+end
+
+function module.addSpawn(name,key)
+
+    local root = getRoot()
+    if not root then return end
+
+    if name == "" then return end
 
     local data = {
         name = name,
@@ -45,31 +85,14 @@ function module.addSpawn(ctx,name,key)
 
     table.insert(module.spawns,data)
 
-    module.spawnBox:AddButton(name,function()
-        module.teleport(data.cf)
-    end)
-
-    if key and key ~= "" then
-
-        module.spawnBox:AddLabel(name.." Key")
-        :AddKeyPicker("TPKEY_"..name,{
-            Default = key,
-            Mode = "Toggle",
-            Text = "Teleport "..name
-        })
-
-        Options["TPKEY_"..name]:OnClick(function()
-            module.teleport(data.cf)
-        end)
-
-    end
+    createSpawnButton(data)
 
 end
 
 function module.init(ctx)
 
-    local tab = ctx.tab
     local box = ctx.box
+    local tab = ctx.tab
 
     box:AddInput("TPName",{
         Text="Spawn Name",
@@ -81,20 +104,18 @@ function module.init(ctx)
         Default=""
     })
 
-    box:AddButton("Set Spawn",function()
+    box:AddButton("Save Current Position",function()
 
         local name = Options.TPName.Value
         local key = Options.TPKey.Value
 
-        if name ~= "" then
-            module.addSpawn(ctx,name,key)
-        end
+        module.addSpawn(name,key)
 
     end)
 
-    module.spawnBox = tab:AddRightGroupbox("Saved Spawns")
+    spawnBox = tab:AddLeftGroupbox("Saved Spawns")
 
-    module.spawnBox:AddButton("Teleport Back",function()
+    spawnBox:AddButton("Teleport Back",function()
         module.teleportBack()
     end)
 

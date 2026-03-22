@@ -5,8 +5,8 @@ local player = Players.LocalPlayer
 
 module.meta = {
     name = "Teleport",
-    tab = "Movement",
-    side = "Right",
+    tab = "Misc",
+    side = "Left",
     priority = 5
 }
 
@@ -14,14 +14,12 @@ module.spawns = {}
 module.lastPosition = nil
 
 local spawnBox
+local managerBox
 
 local function getRoot()
-
     local char = player.Character
     if not char then return end
-
     return char:FindFirstChild("HumanoidRootPart")
-
 end
 
 function module.teleport(cf)
@@ -45,47 +43,54 @@ function module.teleportBack()
 
 end
 
-local function createSpawnButton(data)
+local function rebuildUI()
 
-    spawnBox:AddButton(data.name,function()
-        module.teleport(data.cf)
+    spawnBox:ClearChildren()
+    managerBox:ClearChildren()
+
+    spawnBox:AddButton("Teleport Back",function()
+        module.teleportBack()
     end)
 
-    if data.key and data.key ~= "" then
+    for i,data in ipairs(module.spawns) do
 
-        local id = "TPKEY_"..data.name..tostring(#module.spawns)
-
-        spawnBox:AddLabel(data.name.." Key")
-        :AddKeyPicker(id,{
-            Default = data.key,
-            Mode = "Toggle",
-            Text = "Teleport "..data.name
-        })
-
-        Options[id]:OnClick(function()
+        spawnBox:AddButton(data.name,function()
             module.teleport(data.cf)
+        end)
+
+        managerBox:AddLabel(data.name)
+
+        managerBox:AddButton("Remove "..data.name,function()
+            table.remove(module.spawns,i)
+            rebuildUI()
+        end)
+
+        managerBox:AddButton("Rename "..data.name,function()
+
+            local new = Options.TPRename.Value
+            if new ~= "" then
+                data.name = new
+                rebuildUI()
+            end
+
         end)
 
     end
 
 end
 
-function module.addSpawn(name,key)
+function module.addSpawn(name)
 
     local root = getRoot()
     if not root then return end
-
     if name == "" then return end
 
-    local data = {
+    table.insert(module.spawns,{
         name = name,
-        cf = root.CFrame,
-        key = key
-    }
+        cf = root.CFrame
+    })
 
-    table.insert(module.spawns,data)
-
-    createSpawnButton(data)
+    rebuildUI()
 
 end
 
@@ -95,29 +100,23 @@ function module.init(ctx)
     local tab = ctx.tab
 
     box:AddInput("TPName",{
-        Text="Spawn Name",
-        Default="MySpawn"
+        Text="Teleport Name",
+        Default="MyTeleport"
     })
 
-    box:AddInput("TPKey",{
-        Text="Keybind (optional)",
+    box:AddButton("Save Position",function()
+        module.addSpawn(Options.TPName.Value)
+    end)
+
+    box:AddInput("TPRename",{
+        Text="Rename To",
         Default=""
     })
 
-    box:AddButton("Save Current Position",function()
+    spawnBox = tab:AddRightGroupbox("Saved Teleports")
+    managerBox = tab:AddLeftGroupbox("Teleport Manager")
 
-        local name = Options.TPName.Value
-        local key = Options.TPKey.Value
-
-        module.addSpawn(name,key)
-
-    end)
-
-    spawnBox = tab:AddLeftGroupbox("Saved Spawns")
-
-    spawnBox:AddButton("Teleport Back",function()
-        module.teleportBack()
-    end)
+    rebuildUI()
 
 end
 

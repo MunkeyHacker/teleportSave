@@ -3,8 +3,16 @@ local module = {}
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
+module.meta = {
+    name = "Teleport",
+    tab = "Teleport",
+    side = "Left",
+    priority = 1
+}
+
 module.spawns = {}
 module.lastPosition = nil
+module.spawnBox = nil
 
 local function getRoot()
     local char = player.Character or player.CharacterAdded:Wait()
@@ -25,7 +33,7 @@ function module.teleportBack()
     end
 end
 
-function module.addSpawn(name,key)
+function module.addSpawn(ctx,name,key)
 
     local root = getRoot()
 
@@ -41,7 +49,8 @@ function module.addSpawn(name,key)
         module.teleport(data.cf)
     end)
 
-    if key ~= "" then
+    if key and key ~= "" then
+
         module.spawnBox:AddLabel(name.." Key")
         :AddKeyPicker("TPKEY_"..name,{
             Default = key,
@@ -52,33 +61,33 @@ function module.addSpawn(name,key)
         Options["TPKEY_"..name]:OnClick(function()
             module.teleport(data.cf)
         end)
+
     end
 
 end
 
-function module.init(window)
+function module.init(ctx)
 
-    local tab = window:AddTab("Teleport")
+    local tab = ctx.tab
+    local box = ctx.box
 
-    local main = tab:AddLeftGroupbox("Create Spawn")
-
-    main:AddInput("TPName",{
+    box:AddInput("TPName",{
         Text="Spawn Name",
         Default="MySpawn"
     })
 
-    main:AddInput("TPKey",{
+    box:AddInput("TPKey",{
         Text="Keybind (optional)",
         Default=""
     })
 
-    main:AddButton("Set Spawn",function()
+    box:AddButton("Set Spawn",function()
 
         local name = Options.TPName.Value
         local key = Options.TPKey.Value
 
         if name ~= "" then
-            module.addSpawn(name,key)
+            module.addSpawn(ctx,name,key)
         end
 
     end)

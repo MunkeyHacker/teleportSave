@@ -40,10 +40,7 @@ end
 
 -- Update the UI for a single spawn
 function module:updateSpawnUI(data)
-    -- Save references to remove/update later
-    if not self.uiElements[data.name] then
-        self.uiElements[data.name] = {}
-    end
+    self.uiElements[data.name] = self.uiElements[data.name] or {}
 
     local btn = self.spawnBox:AddButton(data.name, function()
         module.teleport(data.cf)
@@ -67,13 +64,13 @@ function module:updateSpawnUI(data)
     self.uiElements[data.name].renameInput = renameInput
 
     if data.key and data.key~="" then
-        self.spawnBox:AddLabel(data.name.." Key")
-            :AddKeyPicker("TPKEY_"..data.name,{
-                Default = data.key,
-                Mode = "Toggle",
-                Text = "Teleport "..data.name
-            })
-        Options["TPKEY_"..data.name]:OnClick(function()
+        local label = self.spawnBox:AddLabel(data.name.." Key")
+        local keypicker = label:AddKeyPicker("TPKEY_"..data.name,{
+            Default = data.key,
+            Mode = "Toggle",
+            Text = "Teleport "..data.name
+        })
+        keypicker:OnClick(function()
             module.teleport(data.cf)
         end)
     end
@@ -84,19 +81,16 @@ function module:rebuildSpawnUI()
     self.uiElements = {}
     if not self.spawnBox then return end
 
-    -- Clear existing groupbox by destroying children
     for _,child in ipairs(self.spawnBox:GetChildren()) do
         if child:IsA("TextButton") or child:IsA("TextBox") or child:IsA("TextLabel") then
             child:Destroy()
         end
     end
 
-    -- Re-add teleport back button
     self.spawnBox:AddButton("Teleport Back", function()
         self.teleportBack()
     end)
 
-    -- Rebuild all saved spawns
     for _,v in ipairs(self.spawns) do
         self:updateSpawnUI(v)
     end
@@ -145,8 +139,11 @@ end
 function module:loadSpawns()
     if self.Config and self.Config.load then
         local loaded = self.Config.load("Teleports") or {}
+        self.spawns = {}
         for _,v in ipairs(loaded) do
-            table.insert(self.spawns,{name=v.name,cf=v.cf,key=v.key})
+            if v.name and v.cf then
+                table.insert(self.spawns,{name=v.name,cf=v.cf,key=v.key})
+            end
         end
         module:rebuildSpawnUI()
     end
@@ -155,8 +152,9 @@ end
 -- INIT MODULE
 function module.init(ctx)
     local tab = ctx.tab
-    local box = ctx.box
     self.Config = ctx.Config
+
+    local box = ctx.box
 
     box:AddInput("TPName",{
         Text="Spawn Name",
@@ -177,7 +175,7 @@ function module.init(ctx)
     end)
 
     -- Saved spawns UI
-    module.spawnBox = tab:AddRightGroupbox("Saved Spawns")
+    self.spawnBox = tab:AddRightGroupbox("Saved Spawns")
 
     -- Load saved spawns
     module:loadSpawns()

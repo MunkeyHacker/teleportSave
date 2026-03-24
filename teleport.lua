@@ -7,23 +7,24 @@ module.meta = {
     name = "Teleport",
     tab = "Misc",
     side = "Right",
-    priority = 1
+    priority = 5
 }
 
 module.spawns = {}
-module.Config = nil
 module.lastPosition = nil
+module.dropdown = nil
+module.Config = nil
 
-local function getRoot()
-    local char = player.Character or player.CharacterAdded:Wait()
-    return char:WaitForChild("HumanoidRootPart")
+local function root()
+    local c = player.Character or player.CharacterAdded:Wait()
+    return c:WaitForChild("HumanoidRootPart")
 end
 
-local function packCF(cf)
+local function pack(cf)
     return {cf:components()}
 end
 
-local function unpackCF(t)
+local function unpackcf(t)
     return CFrame.new(
         t[1],t[2],t[3],
         t[4],t[5],t[6],
@@ -32,56 +33,49 @@ local function unpackCF(t)
     )
 end
 
-function module.teleport(cf)
-    local root = getRoot()
-    module.lastPosition = root.CFrame
-    root.CFrame = cf
+function module.tp(cf)
+    local r = root()
+    module.lastPosition = r.CFrame
+    r.CFrame = cf
 end
 
-function module.teleportBack()
-    if module.lastPosition then
-        getRoot().CFrame = module.lastPosition
-    end
-end
-
-function module.refreshDropdown()
+function module.refresh()
     if not module.dropdown then return end
     
-    local names = {}
+    local list = {}
     for _,v in ipairs(module.spawns) do
-        table.insert(names,v.name)
+        table.insert(list,v.name)
     end
     
-    module.dropdown:SetValues(names)
+    module.dropdown:SetValues(list)
 end
 
 function module.save()
     if not module.Config then return end
     
-    local save = {}
+    local s = {}
     for _,v in ipairs(module.spawns) do
-        table.insert(save,{
-            name = v.name,
-            cf = packCF(v.cf)
+        table.insert(s,{
+            name=v.name,
+            cf=pack(v.cf)
         })
     end
     
     pcall(function()
-        module.Config.save("Teleports",save)
+        module.Config.save("Teleports",s)
     end)
 end
 
 function module.load()
     if not module.Config then return end
     
-    local loaded = module.Config.load("Teleports") or {}
-    module.spawns = {}
+    local l = module.Config.load("Teleports") or {}
     
-    for _,v in ipairs(loaded) do
+    for _,v in ipairs(l) do
         if v.cf then
             table.insert(module.spawns,{
-                name = v.name,
-                cf = unpackCF(v.cf)
+                name=v.name,
+                cf=unpackcf(v.cf)
             })
         end
     end
@@ -93,60 +87,60 @@ function module.init(ctx)
     
     local box = ctx.box
     
-    local nameInput = box:AddInput("TPName",{Text="Spawn Name",Default="Spawn"})
+    local name = box:AddInput("TPNAME",{Text="Spawn Name",Default="Spawn"})
     
-    box:AddButton("Save Position",function()
-        local name = nameInput.Value
-        if name == "" then return end
+    box:AddButton("Save Spawn",function()
+        if name.Value == "" then return end
         
         table.insert(module.spawns,{
-            name = name,
-            cf = getRoot().CFrame
+            name=name.Value,
+            cf=root().CFrame
         })
         
-        module.refreshDropdown()
+        module.refresh()
         module.save()
     end)
     
-    module.dropdown = box:AddDropdown("TPList",{
-        Text = "Saved Teleports",
-        Values = {},
-        Default = nil
+    module.dropdown = box:AddDropdown("TPLIST",{
+        Text="Saved Spawns",
+        Values={}
     })
     
     box:AddButton("Teleport",function()
-        local selected = module.dropdown.Value
-        if not selected then return end
+        local sel = module.dropdown.Value
+        if not sel then return end
         
         for _,v in ipairs(module.spawns) do
-            if v.name == selected then
-                module.teleport(v.cf)
+            if v.name == sel then
+                module.tp(v.cf)
                 break
             end
         end
     end)
     
     box:AddButton("Teleport Back",function()
-        module.teleportBack()
+        if module.lastPosition then
+            root().CFrame = module.lastPosition
+        end
     end)
     
-    box:AddButton("Delete Selected",function()
-        local selected = module.dropdown.Value
-        if not selected then return end
+    box:AddButton("Delete",function()
+        local sel = module.dropdown.Value
+        if not sel then return end
         
         for i,v in ipairs(module.spawns) do
-            if v.name == selected then
+            if v.name == sel then
                 table.remove(module.spawns,i)
                 break
             end
         end
         
-        module.refreshDropdown()
+        module.refresh()
         module.save()
     end)
     
     module.load()
-    module.refreshDropdown()
+    module.refresh()
 end
 
 return module

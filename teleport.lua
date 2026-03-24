@@ -1,9 +1,8 @@
-local module = {}
+\local module = {}
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
--- Module metadata
 module.meta = {
     name = "Teleport",
     tab = "Misc",
@@ -11,183 +10,161 @@ module.meta = {
     priority = 1
 }
 
-module.spawns = {}       -- list of saved spawns
+module.spawns = {}
 module.lastPosition = nil
 module.spawnBox = nil
-module.Config = nil      -- Config module reference
-module.uiElements = {}   -- store buttons/inputs for rebuild
+module.Config = nil
 
--- Helper: Get player's root part
+-- root helper
 local function getRoot()
     local char = player.Character or player.CharacterAdded:Wait()
     return char:WaitForChild("HumanoidRootPart")
 end
 
--- Teleport to a given CFrame
+-- serialize cframe
+local function packCF(cf)
+    return {cf:GetComponents()}
+end
+
+local function unpackCF(t)
+    return CFrame.new(unpack(t))
+end
+
+-- teleport
 function module.teleport(cf)
     local root = getRoot()
     module.lastPosition = root.CFrame
     root.CFrame = cf
 end
 
--- Teleport back to last position
 function module.teleportBack()
     if module.lastPosition then
-        local root = getRoot()
-        root.CFrame = module.lastPosition
+        getRoot().CFrame = module.lastPosition
     end
 end
 
--- Update the UI for a single spawn
-function module:updateSpawnUI(data)
-    self.uiElements[data.name] = self.uiElements[data.name] or {}
-
-    -- Main teleport button
-    local btn = self.spawnBox:AddButton(data.name, function()
-        module.teleport(data.cf)
-    end)
-    self.uiElements[data.name].btn = btn
-
-    -- Remove button
-    local removeBtn = self.spawnBox:AddButton("Remove "..data.name, function()
-        module.removeSpawn(data)
-    end)
-    self.uiElements[data.name].removeBtn = removeBtn
-
-    -- Rename input
-    local renameInput = self.spawnBox:AddInput("Rename_"..data.name,{
-        Text="Rename "..data.name,
-        Default=data.name
-    })
-    renameInput:OnChanged(function(value)
-        if value ~= "" and value ~= data.name then
-            module.renameSpawn(data, value)
-        end
-    end)
-    self.uiElements[data.name].renameInput = renameInput
-
-    -- Keybind (optional)
-    if data.key and data.key ~= "" then
-        local label = self.spawnBox:AddLabel(data.name.." Key")
-        local keypicker = label:AddKeyPicker("TPKEY_"..data.name,{
-            Default = data.key,
-            Mode = "Toggle",
-            Text = "Teleport "..data.name
-        })
-        keypicker:OnClick(function()
-            module.teleport(data.cf)
-        end)
-        self.uiElements[data.name].keypicker = keypicker
-    end
-end
-
--- Rebuild all spawn UI safely
+-- rebuild ui
 function module:rebuildSpawnUI()
-    self.uiElements = {}
     if not self.spawnBox then return end
 
-    -- Clear previous children
-    for _,child in ipairs(self.spawnBox:GetChildren()) do
-        if child:IsA("TextButton") or child:IsA("TextBox") or child:IsA("TextLabel") then
-            child:Destroy()
-        end
-    end
+    self.spawnBox:Clear() -- ⭐ LIBRARY SAFE CLEAR
 
-    -- Teleport back button
     self.spawnBox:AddButton("Teleport Back", function()
         self.teleportBack()
     end)
 
-    -- Rebuild all spawns
-    for _,v in ipairs(self.spawns) do
-        self:updateSpawnUI(v)
-    end
-end
+    for i,data in ipairs(self.spawns) do
 
--- Add a new spawn
-function module.addSpawn(name,key,cf)
-    cf = cf or getRoot().CFrame
-    local data = {name=name,cf=cf,key=key}
-    table.insert(module.spawns,data)
-    module:rebuildSpawnUI()
-    module:saveSpawns()
-end
+        self.spawnBox:AddButton(data.name, function()
+            module.teleport(data.cf)
+        end)
 
--- Remove a spawn
-function module.removeSpawn(data)
-    for i,v in ipairs(module.spawns) do
-        if v==data then
+        self.spawnBox:AddButton("Remove "..data.name, function()
             table.remove(module.spawns,i)
-            break
-        end
-    end
-    module:rebuildSpawnUI()
-    module:saveSpawns()
-end
+            module:saveSpawns()
+            module:rebuildSpawnUI()
+        end)
 
--- Rename a spawn
-function module.renameSpawn(data,newName)
-    data.name = newName
-    module:rebuildSpawnUI()
-    module:saveSpawns()
-end
+        local rename = self.spawnBox:AddInput("Rename"..i,{
+            Text="Rename "..data.name,
+            Default=data.name
+        })
 
--- Save all spawns using Config module
-function module:saveSpawns()
-    if self.Config and self.Config.save then
-        local saveTable = {}
-        for _,v in ipairs(self.spawns) do
-            table.insert(saveTable,{name=v.name,cf=v.cf,key=v.key})
-        end
-        pcall(function() self.Config.save("Teleports",saveTable) end)
-    end
-end
-
--- Load saved spawns from Config
-function module:loadSpawns()
-    if self.Config and self.Config.load then
-        local loaded = self.Config.load("Teleports") or {}
-        self.spawns = {}
-        for _,v in ipairs(loaded) do
-            if v.name and v.cf then
-                table.insert(self.spawns,{name=v.name,cf=v.cf,key=v.key})
+        rename:OnFinished(function(val)
+            if val ~= "" then
+                data.name = val
+                module:saveSpawns()
+                module:rebuildSpawnUI()
             end
+        end)
+
+        if data.key and data.key ~= "" then
+            local lbl = self.spawnBox:AddLabel(data.name.." Key")
+            local kp = lbl:AddKeyPicker("TPKEY"..i,{
+                Default=data.key,
+                Mode="Toggle",
+                Text="Teleport "..data.name
+            })
+
+            kp:OnClick(function()
+                module.teleport(data.cf)
+            end)
         end
-        module:rebuildSpawnUI()
     end
 end
 
--- INIT MODULE
+-- add spawn
+function module.addSpawn(name,key)
+    local cf = getRoot().CFrame
+
+    table.insert(module.spawns,{
+        name = name,
+        key = key,
+        cf = cf
+    })
+
+    module:saveSpawns()
+    module:rebuildSpawnUI()
+end
+
+-- save
+function module:saveSpawns()
+    if not self.Config then return end
+
+    local save = {}
+
+    for _,v in ipairs(self.spawns) do
+        table.insert(save,{
+            name = v.name,
+            key = v.key,
+            cf = packCF(v.cf)
+        })
+    end
+
+    pcall(function()
+        self.Config.save("Teleports",save)
+    end)
+end
+
+-- load
+function module:loadSpawns()
+    if not self.Config then return end
+
+    local loaded = self.Config.load("Teleports") or {}
+
+    self.spawns = {}
+
+    for _,v in ipairs(loaded) do
+        if v.cf then
+            table.insert(self.spawns,{
+                name = v.name,
+                key = v.key,
+                cf = unpackCF(v.cf)
+            })
+        end
+    end
+
+    self:rebuildSpawnUI()
+end
+
+-- init
 function module.init(ctx)
-    local tab = ctx.tab
-    self.Config = ctx.Config
+
+    module.Config = ctx.Config
 
     local box = ctx.box
 
-    -- Inputs for new spawns
-    local TPNameInput = box:AddInput("TPName",{
-        Text="Spawn Name",
-        Default="MySpawn"
-    })
+    local nameInput = box:AddInput("TPName",{Text="Spawn Name",Default="MySpawn"})
+    local keyInput = box:AddInput("TPKey",{Text="Keybind",Default=""})
 
-    local TPKeyInput = box:AddInput("TPKey",{
-        Text="Keybind (optional)",
-        Default=""
-    })
-
-    -- Set Spawn button
     box:AddButton("Set Spawn",function()
-        local name = TPNameInput.Value
-        local key = TPKeyInput.Value
-        if name ~= "" then
-            module.addSpawn(name,key)
+        if nameInput.Value ~= "" then
+            module.addSpawn(nameInput.Value,keyInput.Value)
         end
     end)
 
-    -- Saved spawns UI
-    self.spawnBox = tab:AddRightGroupbox("Saved Spawns")
+    module.spawnBox = ctx.tab:AddRightGroupbox("Saved Spawns")
 
-    -- Load saved spawns
     module:loadSpawns()
 end
 

@@ -126,6 +126,12 @@ end
 function module.init(ctx)
 
     module.Config = ctx.Config
+
+    if not module.Config then
+        warn("Teleport: Config not passed in context")
+    else
+        print("Teleport: Config loaded successfully")
+    end
     
     local box = ctx.box
     

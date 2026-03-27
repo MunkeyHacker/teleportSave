@@ -51,32 +51,74 @@ function module.refresh()
 end
 
 function module.save()
-    if not module.Config then return end
-    
+    if not module.Config then
+        warn("Teleport: Config module not available")
+        return
+    end
+
     local s = {}
     for _,v in ipairs(module.spawns) do
-        table.insert(s,{
-            name=v.name,
-            cf=pack(v.cf)
-        })
+        if v.name and v.cf then
+            table.insert(s,{
+                name=v.name,
+                cf=pack(v.cf)
+            })
+        end
     end
-    
-    pcall(function()
-        module.Config.save("Teleports",s)
+
+    local ok, err = pcall(function()
+        if module.Config.save then
+            module.Config.save("Teleports",s)
+        elseif module.Config.set then
+            module.Config.set("Teleports",s)
+        else
+            warn("Teleport: Config has no save/set method")
+        end
     end)
+
+    if not ok then
+        warn("Teleport save error:",err)
+    end
 end
 
 function module.load()
-    if not module.Config then return end
-    
-    local l = module.Config.load("Teleports") or {}
-    
+    if not module.Config then
+        warn("Teleport: Config module not available")
+        return
+    end
+
+    local l
+    local ok, err = pcall(function()
+        if module.Config.load then
+            l = module.Config.load("Teleports")
+        elseif module.Config.get then
+            l = module.Config.get("Teleports")
+        end
+    end)
+
+    if not ok then
+        warn("Teleport load error:",err)
+        return
+    end
+
+    if not l or type(l) ~= "table" then
+        return
+    end
+
     for _,v in ipairs(l) do
-        if v.cf then
-            table.insert(module.spawns,{
-                name=v.name,
-                cf=unpackcf(v.cf)
-            })
+        if v.name and v.cf and type(v.cf) == "table" and #v.cf == 12 then
+            local success, result = pcall(function()
+                return unpackcf(v.cf)
+            end)
+
+            if success and result then
+                table.insert(module.spawns,{
+                    name=v.name,
+                    cf=result
+                })
+            else
+                warn("Teleport: Failed to unpack CFrame for",v.name)
+            end
         end
     end
 end
